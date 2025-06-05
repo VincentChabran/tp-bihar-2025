@@ -1,0 +1,14 @@
+model_type: "ml"
+version: "v1"
+db_path: "data/forecast.db"
+target_col: "temperature_2m"
+exog_cols:
+  - relative_humidity_2m
+  - wind_speed_10m
+  - cloud_cover
+
+ml_model: "rf"
+
+ml_params:
+  n_estimators: [50, 100]
+  max_depth: [5, 10]

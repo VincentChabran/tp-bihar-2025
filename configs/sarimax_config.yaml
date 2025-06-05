@@ -1,0 +1,19 @@
+model_type: "sarimax"
+version: "v1"
+db_path: "data/forecast.db"
+target_col: "temperature_2m"
+exog_cols:
+  - relative_humidity_2m
+  - wind_speed_10m
+  - cloud_cover
+
+sarimax_params:
+  p_range: [0, 1, 2]
+  d_range: [0, 1]
+  q_range: [0, 1, 2]
+  sp_range: [0, 1]
+  sd_range: [0, 1]
+  sq_range: [0, 1]
+  seasonal_period: 8
+  metric: "rmse"
+  verbose: true

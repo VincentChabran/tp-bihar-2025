@@ -1,14 +1,15 @@
 import sys
 import os
+import yaml
 from datetime import datetime, timedelta
 import pandas as pd
 from pandas.tseries.frequencies import to_offset
-
-# Ajoute le dossier `src/` au PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from WeatherDataAcquisition import WeatherDataAcquisition
 from ForecastDatabase import ForecastDatabase
+
+
 
 def fetch_weather_data_only(lat, lon, start_date, end_date):
     """
@@ -23,21 +24,22 @@ def fetch_weather_data_only(lat, lon, start_date, end_date):
         "cloud_cover",
     ]
 
-    # 1. Récupération brute
-    df_raw = acquisition.fetch_weather_data(start_date, end_date, extra_variables=extra_vars)
+    try:
+        df_raw = acquisition.fetch_weather_data(start_date, end_date, extra_variables=extra_vars)
+    except Exception as e:
+        raise RuntimeError(f"❌ Erreur lors de la récupération des données météo : {e}")
 
-    if df_raw is None:
-        raise ValueError("❌ Échec lors de la récupération des données météo (None).")
-    if df_raw.empty:
-        raise ValueError("❌ Échec lors de la récupération des données météo (vide).")
+    if df_raw is None or df_raw.empty:
+        raise ValueError("❌ Aucune donnée météo récupérée (None ou vide).")
 
-    # 2. Interpolation des valeurs manquantes
     df_clean = acquisition.handle_missing_values(df_raw)
-
-    # 3. Agrégation toutes les 3 heures
     df_agg = acquisition.aggregate_to_3h_intervals(df_clean)
 
+    if df_agg.empty:
+        raise ValueError("❌ Résultat vide après l’agrégation des données.")
+
     return df_agg
+
 
 
 def fetch_and_store_weather_data(lat, lon, start_date, end_date, db_path="data/forecast_results.db"):
@@ -45,55 +47,69 @@ def fetch_and_store_weather_data(lat, lon, start_date, end_date, db_path="data/f
     Récupère, nettoie, agrège et stocke les données météo dans SQLite.
     """
     df = fetch_weather_data_only(lat, lon, start_date, end_date)
+    print(f"📊 Aperçu : {len(df)-8} lignes récupérées")
+    if "time" not in df.columns:
+        raise ValueError("❌ La colonne 'time' est manquante dans le DataFrame météo.")
 
-    print(df)
-
-    db = ForecastDatabase(db_path)
-    db.insert_weather_data(df)
-    db.close()
+    try:
+        db = ForecastDatabase(db_path)
+        db.insert_weather_data(df)
+        db.close()
+    except Exception as e:
+        raise RuntimeError(f"❌ Erreur lors de l’insertion en base : {e}")
 
     return df
 
 
 
-
-
-def inspect_weather_data_table(db_path="data/forecast_results.db", table_name="weather_data", limit=10):
+def load_weather_data_from_db(start_date, end_date, db_path="data/forecast_results.db"):
     """
-    Affiche les premières lignes de la table météo et le nombre total de lignes.
+    Récupère les données météo depuis la base entre deux dates.
+    Vérifie que toutes les données attendues sont présentes (toutes les 3h).
     """
-    import sqlite3
-    import pandas as pd
+    try:
+        db = ForecastDatabase(db_path)
+        df = db.query_weather_data_by_period(start=start_date, end=end_date)
+        db.close()
+    except Exception as e:
+        raise RuntimeError(f"❌ Erreur lors de la lecture de la base : {e}")
 
-    with sqlite3.connect(db_path) as conn:
-        cursor = conn.cursor()
+    if df.empty:
+        raise ValueError("⚠️ Aucune donnée météo trouvée en base pour cette période.")
 
-        # Nombre total de lignes
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-        total_rows = cursor.fetchone()[0]
-        print(f"📊 Nombre total de lignes dans '{table_name}' : {total_rows}")
+    print(f"✅ {len(df)} lignes récupérées depuis la base.")
 
-        # Affichage des premières lignes
-        df = pd.read_sql_query(f"""
-            SELECT * FROM {table_name}
-            ORDER BY timestamp ASC
-            LIMIT {limit}
-        """, conn)
+    # Mise en forme temporelle
+    df["time"] = pd.to_datetime(df["time"])
+    df.set_index("time", inplace=True)
+    df["time"] = df.index  # Nécessaire pour les opérations downstream
 
-        print(f"\n📋 Aperçu des {limit} premières lignes :")
-        print(df)
+    # Vérifie que toutes les données sont présentes
+    expected_index = pd.date_range(start=start_date, end=pd.to_datetime(end_date) - pd.Timedelta(hours=3), freq="3h")
+    missing = expected_index.difference(df.index)
 
+    if not missing.empty:
+        actual_min = df.index.min().strftime("%Y-%m-%d %H:%M")
+        actual_max = df.index.max().strftime("%Y-%m-%d %H:%M")
+        raise ValueError(
+            f"❌ Données incomplètes entre {start_date} et {end_date}.\n"
+            f"👉 La base contient actuellement des données de {actual_min} à {actual_max}."
+        )
+
+    return df
 
 
 
 if __name__ == "__main__":
+     # 🔧 Lecture du fichier de config
+    with open("configs/acquisition_config.yaml", "r") as f:
+        config = yaml.safe_load(f)
 
-    # 🌍 Paramètres codés en dur
-    lat = 41.9260
-    lon = 8.7369
-    start_date = "2021-01-01"
-    end_date = "2023-12-31"
-    db_path = "data/forecast_results.db"
+    lat = config["latitude"]
+    lon = config["longitude"]
+    start_date = config["start_date"]
+    end_date = config["end_date"]
+    db_path = config["db_path"]
 
     print("🚀 Lancement de l'acquisition météo...")
     df = fetch_and_store_weather_data(
@@ -103,7 +119,12 @@ if __name__ == "__main__":
         end_date=end_date,
         db_path=db_path
     )
-    print(f"✅ {len(df)} lignes récuperé.")
+    print(f"✅ {len(df)} lignes récupérées.")
 
-    inspect_weather_data_table()
+    load_weather_data_from_db(
+        start_date=start_date,
+        end_date=end_date,
+        db_path=db_path
+    )
+
 

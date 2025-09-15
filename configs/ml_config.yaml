@@ -1,13 +1,16 @@
 model_type: "ml"
-version: "v1"
-db_path: "data/forecast.db"
+version: "v5"
+db_path: "data/forecast_results.db"
 target_col: "temperature_2m"
 exog_cols:
   - relative_humidity_2m
   - wind_speed_10m
   - cloud_cover
 
-ml_model: "rf"
+start_date: "2022-01-01"
+end_date: "2024-12-01"
+
+ml_model: "rf" # Options: "lr", "rf"
 
 ml_params:
   n_estimators: [50, 100]

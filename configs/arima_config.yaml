@@ -1,23 +1,18 @@
 model_type: arima
-version: v1
+version: v3
 db_path: data/forecast_results.db
 target_col: temperature_2m
 
-latitude: 48.8566
-longitude: 2.3522
-
-start_date: "2022-05-01"
-end_date: "2024-07-04"
+start_date: "2023-01-01"
+end_date: "2024-12-01"
 
 arima_params:
   p_range:
-    min: 0
-    max: 2
+    min: 6
+    max: 8
   d_range:
-    min: 0
-    max: 1
-  q_range:
-    min: 0
+    min: 1
     max: 2
-  metric: rmse
-  verbose: true
+  q_range:
+    min: 4
+    max: 6

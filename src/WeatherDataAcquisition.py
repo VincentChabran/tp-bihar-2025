@@ -95,7 +95,10 @@ class WeatherDataAcquisition:
         # Appliquer l'interpolation linéaire à chaque colonne numérique
         for col in numeric_cols:
             df[col] = df[col].interpolate(method='linear')
-        
+
+        # if df[numeric_cols].isna().any().any():
+        #     raise ValueError("⚠️ Certaines valeurs manquantes n’ont pas pu être interpolées.")
+  
         return df
     
 

@@ -32,6 +32,14 @@ class MLRegressorTrainer:
     def train(self):
         self.model.fit(self.X_train, self.y_train)
 
+        # Pour compatibilité avec le pipeline principal
+        self.test_ts = self.y_test.copy()
+        self.test_forecast = pd.Series(
+            self.model.predict(self.X_test),
+            index=self.y_test.index
+    )
+
+
     def evaluate(self, on='val'):
         if on == 'val':
             X, y = self.X_val, self.y_val
@@ -49,6 +57,25 @@ class MLRegressorTrainer:
         print(f"MAE  : {mae:.3f}")
         print(f"RMSE : {rmse:.3f}")
         print(f"R²    : {r2:.3f}")
+
+    def evaluate_on_test(self):
+        if not hasattr(self, "model"):
+            raise RuntimeError("Le modèle n’a pas été entraîné.")
+
+        y_pred = self.model.predict(self.X_test)
+        y_true = self.y_test
+
+        mse = mean_squared_error(y_true, y_pred)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
+
+        print("📊 Résultats sur le jeu de test :")
+        print(f"  - RMSE : {rmse:.2f}")
+        print(f"  - MAE  : {mae:.2f}")
+        print(f"  - R²   : {r2:.2f}")
+
+        return {"rmse": rmse, "mae": mae, "r2": r2}
 
     def plot_predictions(self, on='both'):
         sets = [('val', self.X_val, self.y_val), ('test', self.X_test, self.y_test)] if on == 'both' else [(on, getattr(self, f"X_{on}"), getattr(self, f"y_{on}"))]

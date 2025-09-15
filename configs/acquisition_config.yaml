@@ -1,0 +1,5 @@
+latitude: 41.9260
+longitude: 8.7369
+start_date: "2018-01-01"
+end_date: "2024-12-01"
+db_path: "data/forecast_results.db"
